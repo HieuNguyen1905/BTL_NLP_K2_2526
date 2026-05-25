@@ -1,0 +1,65 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging
+build/
+dist/
+wheels/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Local data
+data/
+*.csv
+*.tsv
+*.jsonl
+*.parquet
+*.arrow
+
+# Model checkpoints and training outputs
+checkpoints/
+models/
+outputs/
+runs/
+wandb/
+mlruns/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Test, cache, and coverage artifacts
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
