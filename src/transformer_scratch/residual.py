@@ -1,6 +1,9 @@
-import torch
 import torch.nn as nn
-import math
+
+try:
+    from .normalization import LayerNormalization
+except ImportError:
+    from normalization import LayerNormalization
 
 class ResidualConnection(nn.Module):
     def __init__(self, d_model: int, dropout: float):
