@@ -2,40 +2,62 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 try:
-    from .normalization import LayerNormalization
+    from .normalization import RMSNorm
     from .residual import ResidualConnection
 except ImportError:
-    from normalization import LayerNormalization
+    from normalization import RMSNorm
     from residual import ResidualConnection
+
+
+def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    batch, num_kv_head, seq_len, head_dim = hidden_states.shape
+    if n_rep == 1:
+        return hidden_states
+
+    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_kv_head, n_rep, seq_len, head_dim)
+    return hidden_states.reshape(batch, num_kv_head * n_rep, seq_len, head_dim)
 
 
 class FeedForwardBlock(nn.Module):
     def __init__(self, d_model: int, d_ff: int, dropout: float):
         super().__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
+        self.w1 = nn.Linear(d_model, d_ff, bias=False)
+        self.w2 = nn.Linear(d_model, d_ff, bias=False)
+        self.w3 = nn.Linear(d_ff, d_model, bias=False)
         self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ff, d_model)
 
     def forward(self, x):
-        return self.linear2(self.dropout(torch.relu(self.linear1(x))))
+        gate = F.silu(self.w1(x))
+        up = self.w2(x)
+        return self.dropout(self.w3(gate * up))
 
 
 class MultiHeadAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, num_head: int, dropout: float):
+    def __init__(self, d_model: int, num_head: int, dropout: float, num_kv_head: int | None = None):
         super().__init__()
+        num_kv_head = num_head if num_kv_head is None else num_kv_head
+        if num_head <= 0:
+            raise ValueError("num_head must be greater than 0")
+        if num_kv_head <= 0:
+            raise ValueError("num_kv_head must be greater than 0")
         if d_model % num_head != 0:
             raise ValueError("d_model must be divisible by num_head")
+        if num_head % num_kv_head != 0:
+            raise ValueError("num_head must be divisible by num_kv_head")
 
         self.d_model = d_model
         self.num_head = num_head
+        self.num_kv_head = num_kv_head
+        self.n_rep = num_head // num_kv_head
         self.d_k = d_model // num_head
 
-        self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
-        self.w_o = nn.Linear(d_model, d_model)
+        self.w_q = nn.Linear(d_model, num_head * self.d_k, bias=False)
+        self.w_k = nn.Linear(d_model, num_kv_head * self.d_k, bias=False)
+        self.w_v = nn.Linear(d_model, num_kv_head * self.d_k, bias=False)
+        self.w_o = nn.Linear(num_head * self.d_k, d_model, bias=False)
         self.dropout = nn.Dropout(dropout)
         self.attention_score = None
 
@@ -59,8 +81,11 @@ class MultiHeadAttentionBlock(nn.Module):
         value = self.w_v(v)
 
         query = query.view(query.shape[0], query.shape[1], self.num_head, self.d_k).transpose(1, 2)
-        key = key.view(key.shape[0], key.shape[1], self.num_head, self.d_k).transpose(1, 2)
-        value = value.view(value.shape[0], value.shape[1], self.num_head, self.d_k).transpose(1, 2)
+        key = key.view(key.shape[0], key.shape[1], self.num_kv_head, self.d_k).transpose(1, 2)
+        value = value.view(value.shape[0], value.shape[1], self.num_kv_head, self.d_k).transpose(1, 2)
+
+        key = repeat_kv(key, self.n_rep)
+        value = repeat_kv(value, self.n_rep)
 
         x, self.attention_score = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
         x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.num_head * self.d_k)
@@ -84,7 +109,7 @@ class Encoder(nn.Module):
     def __init__(self, layers: nn.ModuleList, d_model: int):
         super().__init__()
         self.layers = layers
-        self.norm = LayerNormalization(d_model)
+        self.norm = RMSNorm(d_model)
 
     def forward(self, x, mask):
         for layer in self.layers:
