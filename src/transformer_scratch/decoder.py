@@ -2,11 +2,11 @@ import torch.nn as nn
 
 try:
     from .encoder import FeedForwardBlock, MultiHeadAttentionBlock
-    from .normalization import LayerNormalization
+    from .normalization import RMSNorm
     from .residual import ResidualConnection
 except ImportError:
     from encoder import FeedForwardBlock, MultiHeadAttentionBlock
-    from normalization import LayerNormalization
+    from normalization import RMSNorm
     from residual import ResidualConnection
 
 
@@ -36,7 +36,7 @@ class Decoder(nn.Module):
     def __init__(self, layers: nn.ModuleList, d_model: int):
         super().__init__()
         self.layers = layers
-        self.norm = LayerNormalization(d_model)
+        self.norm = RMSNorm(d_model)
 
     def forward(self, x, encoder_output, src_mask, tgt_mask):
         for layer in self.layers:

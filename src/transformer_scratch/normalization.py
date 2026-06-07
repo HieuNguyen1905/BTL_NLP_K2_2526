@@ -12,3 +12,14 @@ class LayerNormalization(nn.Module):
         mean = x.mean(dim=-1, keepdim=True)
         variance = x.var(dim=-1, keepdim=True, unbiased=False)
         return self.alpha * (x - mean) / torch.sqrt(variance + self.epsilon) + self.bias
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, d_model: int, epsilon: float = 1e-6):
+        super().__init__()
+        self.epsilon = epsilon
+        self.weight = nn.Parameter(torch.ones(d_model))
+
+    def forward(self, x):
+        rms = torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + self.epsilon)
+        return x * rms * self.weight

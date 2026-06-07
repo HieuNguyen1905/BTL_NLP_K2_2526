@@ -16,7 +16,7 @@ except ImportError:
 class ProjectionLayer(nn.Module):
     def __init__(self, d_model: int, vocab_size: int):
         super().__init__()
-        self.projection = nn.Linear(d_model, vocab_size)
+        self.projection = nn.Linear(d_model, vocab_size, bias=False)
 
     def forward(self, x):
         return torch.log_softmax(self.projection(x), dim=-1)
